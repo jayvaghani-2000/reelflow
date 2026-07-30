@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #121212; color: #fff;
+    }
+    header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; flex-shrink: 0;
+    }
+    /* Address bar. `min-width: 0` lets it shrink below its content so the
+       badge and reload button keep their space in a narrow panel. */
+    #url {
+      flex: 1; min-width: 0;
+      font-size: 11px; padding: 4px 9px; border-radius: 999px;
+      background: rgba(255,255,255,.07); color: rgba(255,255,255,.8);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      user-select: text; cursor: text;
+    }
+    #width {
+      font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+      padding: 3px 8px; border-radius: 999px;
+      background: rgba(255,255,255,.1); color: rgba(255,255,255,.75);
+    }
+    #width.narrow { background: rgba(255,45,111,.2); color: #ffb3cb; }
+    header button {
+      background: rgba(255,255,255,.1); border: none; color: #fff;
+      font: inherit; font-size: 11px; font-weight: 600;
+      padding: 5px 9px; border-radius: 6px; cursor: pointer;
+    }
+    header button:hover { background: rgba(255,255,255,.2); }
+    #tip {
+      display: none; padding: 7px 10px; flex-shrink: 0;
+      font-size: 11px; color: #ffb3cb; background: rgba(255,45,111,.12);
+    }
+    #tip.show { display: block; }
+    iframe { flex: 1; width: 100%; border: none; background: #000; }
+  </style>
+</head>
+<body>
+  <header>
+    <span id="url" title="">instagram.com</span>
+    <span id="width">0px</span>
+    <button id="reload" title="Reload">&#x21bb;</button>
+  </header>
+  <div id="tip">Drag the panel edge to at least <b>770px</b> for Instagram's full layout and better experience.</div>
+  <iframe id="ig" src="https://www.instagram.com/" allow="autoplay; fullscreen; encrypted-media"></iframe>
+  <script src="panel.js"></script>
+</body>
+</html>

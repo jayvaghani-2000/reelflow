@@ -19,14 +19,22 @@
       "48": "icons/icon48.png"
     }
   },
-  "permissions": ["scripting"],
+  "permissions": ["scripting", "sidePanel", "declarativeNetRequest"],
   "host_permissions": ["*://*.instagram.com/*"],
+  "side_panel": {
+    "default_path": "panel/panel.html"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "ig_frame_headers", "enabled": true, "path": "rules.json" }
+    ]
+  },
   "content_scripts": [
     {
       "matches": ["*://*.instagram.com/*"],
       "js": ["content/content.js"],
       "run_at": "document_idle",
-      "all_frames": false,
+      "all_frames": true,
       "world": "MAIN"
     }
   ]

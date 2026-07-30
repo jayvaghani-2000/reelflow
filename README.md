@@ -10,7 +10,9 @@ Instagram Reels on the web don't give you a scrubber — you can't jump to a spo
 - **Time display** — current time and total duration.
 - **Playback speed** — click to cycle 1× → 1.25× → 1.5× → 2× → 0.5×.
 - **Auto-next** — toggle (or press `a`) to automatically jump to the next reel when the current one ends. Remembered across sessions.
+- **Download** — a floating button in the top-right corner of the current video or post image (press `d` for videos). Grabs the highest-quality version Instagram serves.
 - **Popup** — click the extension icon for an auto-next switch and a keyboard-shortcut reference.
+- **Side panel** — open Instagram in Chrome's side panel (button in the popup) and keep watching while you work in other tabs. The control bar works inside the panel too.
 - **Sound via Instagram's own control** — the bar leaves a click-through slot for Instagram's native audio button (so its global sound state stays in sync); `m` clicks it for you.
 - **Posted date badge** — shows when the video was posted, in the top-right corner.
 - The bar automatically binds to whichever video is currently playing / most on-screen and follows it as you scroll.
@@ -37,4 +39,5 @@ Instagram Reels on the web don't give you a scrubber — you can't jump to a spo
 | `.` | Forward 10 seconds |
 | `k` | Play / pause |
 | `m` | Sound on/off (Instagram's native toggle) |
+| `d` | Download current video |
 | `a` | Toggle auto-next |

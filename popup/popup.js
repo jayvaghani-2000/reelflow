@@ -8,6 +8,14 @@
   const toggle = document.getElementById("autonext");
   const hint = document.getElementById("hint");
 
+  document.getElementById("openPanel").addEventListener("click", async function () {
+    try {
+      const win = await chrome.windows.getCurrent();
+      await chrome.sidePanel.open({ windowId: win.id });
+      window.close();
+    } catch (e) {}
+  });
+
   function showHint() {
     hint.classList.add("show");
     toggle.disabled = true;

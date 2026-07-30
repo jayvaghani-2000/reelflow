@@ -46,6 +46,14 @@
     }
     #hint.show { display: block; }
 
+    .panel-row { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,.08); }
+    #openPanel {
+      width: 100%; padding: 8px 0; border: none; border-radius: 8px;
+      background: #ff2d6f; color: #fff; font: inherit;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    #openPanel:hover { background: #ff4d84; }
+
     h2 {
       font-size: 11px; font-weight: 700; text-transform: uppercase;
       letter-spacing: .06em; color: rgba(255,255,255,.5);
@@ -87,12 +95,17 @@
 
   <div id="hint">Open a video on instagram.com to control this.</div>
 
+  <div class="panel-row">
+    <button id="openPanel">Open Instagram in side panel</button>
+  </div>
+
   <h2>Keyboard shortcuts</h2>
   <div class="keys">
     <div class="key-row"><kbd>,</kbd> Back 10 seconds</div>
     <div class="key-row"><kbd>.</kbd> Forward 10 seconds</div>
     <div class="key-row"><kbd>k</kbd> Play / pause</div>
     <div class="key-row"><kbd>m</kbd> Sound on / off</div>
+    <div class="key-row"><kbd>d</kbd> Download video</div>
     <div class="key-row"><kbd>a</kbd> Toggle auto-next</div>
   </div>
 

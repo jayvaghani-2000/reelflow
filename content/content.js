@@ -10,12 +10,138 @@
 (function () {
   "use strict";
 
-  if (window.top !== window.self) return; // top frame only
+  // Run in the top frame or in our side panel's iframe — but not in IG's
+  // public embed frames (instagram.com/.../embed/ on third-party sites).
+  if (window.top !== window.self && /\/embed(\/|$)/.test(location.pathname))
+    return;
   if (window.__reelSeekerLoaded) return;
   window.__reelSeekerLoaded = true;
 
   const BAR_H = 44;
   const SPEEDS = [1, 1.25, 1.5, 2, 0.5];
+
+  // ---- URL reporting --------------------------------------------------
+  // The side panel hosts us in a cross-origin iframe, so it cannot read our
+  // location — postMessage is the only channel out. Driven from the rAF loop
+  // rather than its own timer: it is a string compare per frame, and it means
+  // Instagram's SPA navigations (which never reload the page) are reported
+  // just like full loads.
+  const inFrame = window.parent !== window;
+  let lastHref = "";
+  let urlChangedAt = 0;
+  function reportUrl() {
+    if (!inFrame || location.href === lastHref) return;
+    lastHref = location.href;
+    urlChangedAt = performance.now();
+    try {
+      // "*" as the target: the parent is an extension page whose origin we
+      // can't know here. The only thing disclosed is the URL of the page
+      // doing the framing, which the framer already chose.
+      window.parent.postMessage({ __reelSeeker: "url", href: lastHref }, "*");
+    } catch (e) {}
+  }
+
+  // ---- Broken-layout detection ------------------------------------------
+  // Instagram chooses its layout when the document loads and keeps that choice
+  // for the whole SPA session. A frame that booted narrow therefore stays in
+  // the mobile layout — no next-reel arrows — even after the panel is widened,
+  // because in-app navigation never re-requests the document. Only a real load
+  // re-measures.
+  //
+  // Panel width can't tell us this happened (the frame may have booted narrow
+  // and been widened since), so look for the arrows themselves: on a reel URL,
+  // if they haven't appeared shortly after the URL settled, ask the panel to
+  // re-boot. Signalled at most once per URL, so it can never become a loop.
+  const LAYOUT_GRACE_MS = 2500;
+  let reloadAskedFor = "";
+
+  function hasNextReelArrow() {
+    return !!(
+      document.querySelector('div[aria-label="Navigate to next reel"]') ||
+      document.querySelector('[aria-label*="next reel" i][role="button"]')
+    );
+  }
+
+  function checkLayout() {
+    if (!inFrame) return;
+    if (!/^\/reels\//.test(location.pathname)) return;
+    if (reloadAskedFor === location.href) return;
+    // Give Instagram time to render before judging the layout broken.
+    if (performance.now() - urlChangedAt < LAYOUT_GRACE_MS) return;
+    if (hasNextReelArrow()) return;
+    reloadAskedFor = location.href;
+    try {
+      window.parent.postMessage(
+        { __reelSeeker: "needsReload", href: location.href },
+        "*",
+      );
+    } catch (e) {}
+  }
+
+  // ---- Side panel: keep IG's left nav rail collapsed --------------------
+  // In the panel, hovering the nav rail expands it over the content. Two
+  // defenses: (1) swallow every hover-family event whose target is anywhere
+  // in the nav's outer container, at capture phase, before IG's listeners
+  // see them; (2) each frame, if the rail's inline width grew anyway, snap
+  // it back to 72px — this also un-sticks a rail that got stuck open.
+  // Clicks are separate events and still work.
+  const NAV_RAIL_W = "72px";
+  let navRoot = null;
+  let navRail = null;
+  let navAt = 0;
+  function findNav() {
+    const now = performance.now();
+    if (navAt && now - navAt < 2000 && navRoot && navRoot.isConnected) return;
+    navAt = now;
+    navRoot = null;
+    navRail = null;
+    const reels = document.querySelector('a[href="/reels/"]');
+    if (!reels) return;
+    // The rail is the first ancestor of the Reels nav link with an inline
+    // width (72px collapsed); the root is the whole nav region around it.
+    let el = reels.parentElement;
+    while (el && el !== document.body) {
+      if (el.style && el.style.width) {
+        navRail = el;
+        break;
+      }
+      el = el.parentElement;
+    }
+    navRoot = reels.closest('div[tabindex="-1"]') || navRail;
+  }
+  function keepNavCollapsed() {
+    if (!inFrame) return;
+    findNav();
+    if (navRail) {
+      const w = parseFloat(navRail.style.width);
+      if (w && w > 100) navRail.style.width = NAV_RAIL_W;
+    }
+  }
+  if (inFrame) {
+    [
+      "mouseover",
+      "mouseout",
+      "mouseenter",
+      "mouseleave",
+      "pointerover",
+      "pointerout",
+      "pointerenter",
+      "pointerleave",
+      "mousemove",
+      "pointermove"
+    ].forEach(function (type) {
+      document.addEventListener(
+        type,
+        function (e) {
+          findNav();
+          if (navRoot && e.target instanceof Node && navRoot.contains(e.target)) {
+            e.stopPropagation();
+          }
+        },
+        true
+      );
+    });
+  }
 
   let activeVideo = null;
   let dragging = false;
@@ -102,6 +228,23 @@
       font-size: 12px; font-weight: 600; white-space: nowrap;
       pointer-events: none; user-select: none; -webkit-user-select: none;
     }
+
+    /* Floating download button over post images (videos get the bar's). */
+    #imgdl {
+      position: fixed; display: none; align-items: center; justify-content: center;
+      width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%;
+      background: rgba(0,0,0,.6); cursor: pointer;
+    }
+    #imgdl:hover { background: rgba(0,0,0,.85); }
+    #imgdl svg { width: 20px; height: 20px; fill: #fff; }
+    #imgdl.loading { cursor: default; }
+    #imgdl.loading svg { display: none; }
+    #imgdl.loading::after {
+      content: ""; width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
+      animation: rs-spin .7s linear infinite;
+    }
+    @keyframes rs-spin { to { transform: rotate(360deg); } }
   `;
   shadow.appendChild(style);
 
@@ -117,7 +260,9 @@
       '<svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a5 5 0 1 0 5 5h2a7 7 0 1 1-7-7z"/>' +
       '<text x="12" y="15.5" font-size="7" font-weight="700" text-anchor="middle" fill="#fff" font-family="sans-serif">10</text></svg>',
     autoNext:
-      '<svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg>'
+      '<svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg>',
+    download:
+      '<svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>'
   };
 
   // ---- Build bar ------------------------------------------------------
@@ -158,6 +303,12 @@
   const dateBadge = document.createElement("div");
   dateBadge.id = "posted";
   shadow.appendChild(dateBadge);
+
+  const imgDl = document.createElement("button");
+  imgDl.id = "imgdl";
+  imgDl.innerHTML = IC.download;
+  imgDl.title = "Download (d)";
+  shadow.appendChild(imgDl);
 
   function mount() {
     (document.body || document.documentElement).appendChild(hostEl);
@@ -256,6 +407,284 @@
       }
     });
     return best;
+  }
+
+  // The main post image on screen — same visibility rules as videos, but
+  // only inside an <article> (feed/post), which keeps profile grids and
+  // avatars out.
+  function pickActiveImage() {
+    const imgs = document.querySelectorAll("article img");
+    let best = null;
+    let bestScore = -1;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    imgs.forEach(function (im) {
+      const r = im.getBoundingClientRect();
+      if (r.width < 240 || r.height < 240) return;
+      if (/profile picture/i.test(im.getAttribute("alt") || "")) return;
+      const c = visibleRect(im, r);
+      if (!c) return;
+      const visW = Math.max(0, Math.min(c.right, vw) - Math.max(c.left, 0));
+      const visH = Math.max(0, Math.min(c.bottom, vh) - Math.max(c.top, 0));
+      const score = visW * visH;
+      if (score > bestScore) {
+        bestScore = score;
+        best = im;
+      }
+    });
+    return best;
+  }
+
+  // ---- Download ---------------------------------------------------------
+
+  // The media object in IG's React props carries direct CDN URLs —
+  // video_versions for videos (the <video> src is often an undownloadable
+  // blob: URL), image_versions2 for photos. IG mixes two shapes: snake_case
+  // (private API) and camelCase / GraphQL fields — accept all of them.
+  function isMediaObj(obj) {
+    return !!(
+      obj.video_versions ||
+      obj.videoVersions ||
+      obj.image_versions2 ||
+      obj.imageVersions2 ||
+      obj.video_url ||
+      obj.display_url
+    );
+  }
+
+  function videoUrlFrom(m) {
+    if (!m) return null;
+    const vv = m.video_versions || m.videoVersions;
+    if (vv && vv.length) return vv[0].url; // first entry = highest quality
+    if (typeof m.video_url === "string") return m.video_url;
+    return null;
+  }
+
+  function imageUrlFrom(m) {
+    if (!m) return null;
+    const iv = m.image_versions2 || m.imageVersions2;
+    if (iv && iv.candidates && iv.candidates.length) return iv.candidates[0].url;
+    if (typeof m.display_url === "string") return m.display_url;
+    return null;
+  }
+
+  function mediaFromObj(obj, depth) {
+    if (!obj || typeof obj !== "object") return null;
+    if (isMediaObj(obj)) return obj;
+    if (depth <= 0) return null;
+    for (const k in obj) {
+      if (k === "children") continue;
+      const val = obj[k];
+      if (!val || typeof val !== "object") continue;
+      if (Array.isArray(val)) {
+        for (let i = 0; i < val.length && i < 3; i++) {
+          const r = mediaFromObj(val[i], depth - 1);
+          if (r) return r;
+        }
+      } else {
+        const r = mediaFromObj(val, depth - 1);
+        if (r) return r;
+      }
+    }
+    return null;
+  }
+
+  function reactMedia(el) {
+    let fiber = null;
+    for (const k in el) {
+      if (k.indexOf("__reactFiber$") === 0) {
+        fiber = el[k];
+        break;
+      }
+    }
+    for (let d = 0; fiber && d < 60; d++, fiber = fiber.return) {
+      const m = mediaFromObj(fiber.memoizedProps, 3);
+      if (m) return m;
+    }
+    return null;
+  }
+
+  function igFilename(m, ext) {
+    const code = m && (m.code || m.pk || m.id);
+    return "instagram-" + (code || Date.now()) + "." + ext;
+  }
+
+  // A post's shortcode is the media id (pk) encoded in IG's base64 alphabet.
+  // Extended share codes append extra data — the pk is the first 11 chars.
+  function shortcodeToPk(code) {
+    code = code.slice(0, 11);
+    const chars =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let n = 0n;
+    for (let i = 0; i < code.length; i++) {
+      const idx = chars.indexOf(code[i]);
+      if (idx < 0) return null;
+      n = n * 64n + BigInt(idx);
+    }
+    return n.toString();
+  }
+
+  // Shortcode for the media element: a permalink inside its <article> (feed),
+  // else the page URL (/p/…, /reel/…, /reels/… all carry it).
+  function shortcodeFor(el) {
+    const art = el.closest ? el.closest("article") : null;
+    if (art) {
+      const a = art.querySelector("a[href*='/p/'], a[href*='/reel/']");
+      const m =
+        a && a.getAttribute("href").match(/\/(?:p|reels?)\/([A-Za-z0-9_-]+)/);
+      if (m) return m[1];
+    }
+    const m2 = location.pathname.match(/\/(?:p|reels?)\/([A-Za-z0-9_-]+)/);
+    return m2 ? m2[1] : null;
+  }
+
+  // IG's own media-info API — same-origin, session-authenticated. This is
+  // the fallback when React props don't expose the media (desktop reels
+  // stream via MSE, so video.src is an unusable blob: URL).
+  function fetchMediaInfo(pk) {
+    return fetch("https://www.instagram.com/api/v1/media/" + pk + "/info/", {
+      credentials: "include",
+      headers: { "x-ig-app-id": "936619743392459" }
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        return (j && j.items && j.items[0]) || null;
+      });
+  }
+
+  function apiMediaForEl(el, wantVideo) {
+    const code = shortcodeFor(el);
+    const pk = code && shortcodeToPk(code);
+    if (!pk) return Promise.resolve(null);
+    return fetchMediaInfo(pk)
+      .then(function (item) {
+        if (!item) return null;
+        let m = item;
+        if (item.carousel_media && item.carousel_media.length) {
+          m = null;
+          for (let i = 0; i < item.carousel_media.length; i++) {
+            const cm = item.carousel_media[i];
+            if (wantVideo ? videoUrlFrom(cm) : imageUrlFrom(cm)) {
+              m = cm;
+              break;
+            }
+          }
+          if (!m) m = item.carousel_media[0];
+        }
+        const url = wantVideo ? videoUrlFrom(m) : imageUrlFrom(m);
+        return url
+          ? { url: url, name: igFilename(item, wantVideo ? "mp4" : "jpg") }
+          : null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  // Fetch → blob → <a download>. A plain <a download> would be ignored
+  // cross-origin; the CDN sends CORS headers, so fetching works. If it
+  // doesn't, open the raw URL so the user can save it manually.
+  function downloadUrl(url, name) {
+    return fetch(url, { credentials: "omit", mode: "cors" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.blob();
+      })
+      .then(function (b) {
+        const u = URL.createObjectURL(b);
+        const a = document.createElement("a");
+        a.href = u;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () {
+          URL.revokeObjectURL(u);
+        }, 4000);
+      })
+      .catch(function () {
+        window.open(url, "_blank");
+      });
+  }
+
+  function downloadActiveVideo() {
+    const v = activeVideo;
+    if (!v) return Promise.resolve();
+    const m = reactMedia(v);
+    let url = videoUrlFrom(m);
+    const src = v.currentSrc || v.src || "";
+    if (!url && /^https?:/.test(src)) url = src;
+    if (url) return downloadUrl(url, igFilename(m, "mp4"));
+    return apiMediaForEl(v, true).then(function (res) {
+      if (res) return downloadUrl(res.url, res.name);
+      console.warn("[Reel Seeker] no downloadable video URL found");
+    });
+  }
+
+  // Largest srcset candidate — currentSrc may be a smaller responsive pick.
+  function bestImageUrl(im) {
+    let url = im.currentSrc || im.src;
+    if (im.srcset) {
+      let bestW = 0;
+      im.srcset.split(",").forEach(function (part) {
+        const bits = part.trim().split(/\s+/);
+        const w = parseInt(bits[1], 10) || 0;
+        if (w > bestW) {
+          bestW = w;
+          url = bits[0];
+        }
+      });
+    }
+    return url;
+  }
+
+  function downloadImage(im) {
+    const m = reactMedia(im);
+    let url = imageUrlFrom(m);
+    if (!url) url = bestImageUrl(im);
+    if (url) return downloadUrl(url, igFilename(m, "jpg"));
+    return apiMediaForEl(im, false).then(function (res) {
+      if (res) return downloadUrl(res.url, res.name);
+      console.warn("[Reel Seeker] no downloadable image URL found");
+    });
+  }
+
+  // Busy state: the floating button becomes a spinner until the download
+  // (fetch + save) settles; further clicks are ignored meanwhile.
+  let dlBusy = false;
+  function triggerDownload() {
+    if (dlBusy) return;
+    const isVideo = !!activeVideo;
+    if (!isVideo && !imgDl.__target) return;
+    dlBusy = true;
+    imgDl.classList.add("loading");
+    const done = function () {
+      dlBusy = false;
+      imgDl.classList.remove("loading");
+    };
+    const p = isVideo ? downloadActiveVideo() : downloadImage(imgDl.__target);
+    Promise.resolve(p).then(done, done);
+  }
+
+  // One floating button at the top-right of the active media — the video
+  // when one is playing, the main post image otherwise.
+  function updateImgDl(v) {
+    const target = v || pickActiveImage();
+    if (!target) {
+      imgDl.style.display = "none";
+      imgDl.__target = null;
+      imgDl.__isVideo = false;
+      return;
+    }
+    imgDl.__target = target;
+    imgDl.__isVideo = !!v;
+    const r = target.getBoundingClientRect();
+    imgDl.style.display = "flex";
+    imgDl.style.left = Math.min(r.right, window.innerWidth) - 44 + "px";
+    imgDl.style.top = Math.max(r.top, 0) + 8 + "px";
   }
 
   function positionBar(v) {
@@ -363,8 +792,9 @@
     if (dateBadge.textContent !== label) dateBadge.textContent = label;
     const r = v.getBoundingClientRect();
     dateBadge.style.display = "block";
-    dateBadge.style.left = Math.min(r.right, window.innerWidth) - 10 + "px";
-    dateBadge.style.top = Math.max(r.top, 0) + 10 + "px";
+    // 54px in from the right edge — clear of the download button (36px + gaps).
+    dateBadge.style.left = Math.min(r.right, window.innerWidth) - 54 + "px";
+    dateBadge.style.top = Math.max(r.top, 0) + 14 + "px";
   }
 
   // ---- UI update loop -------------------------------------------------
@@ -409,7 +839,14 @@
 
   function loop() {
     requestAnimationFrame(loop);
+    // Above the early return below — the URL still changes on pages with no
+    // video (profiles, explore), and the panel's address bar should follow.
+    reportUrl();
+    checkLayout();
+    // Same: the nav rail must stay collapsed on video-less pages too.
+    keepNavCollapsed();
     const v = pickActiveVideo();
+    updateImgDl(v);
     if (!v) {
       hide();
       return;
@@ -596,6 +1033,15 @@
   autoNextBtn.addEventListener("click", function () {
     setAutoNext(!autoNext);
   });
+  imgDl.addEventListener("click", function (e) {
+    // Keep the click off Instagram — it would open/like the post.
+    e.stopPropagation();
+    e.preventDefault();
+    triggerDownload();
+  });
+  imgDl.addEventListener("pointerdown", function (e) {
+    e.stopPropagation();
+  });
 
   // Seek: click + drag on the track
   function seekToClientX(clientX) {
@@ -674,6 +1120,10 @@
         e.stopPropagation();
       } else if (e.key === "a" || e.key === "A") {
         setAutoNext(!autoNext);
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (e.key === "d" || e.key === "D") {
+        triggerDownload();
         e.preventDefault();
         e.stopPropagation();
       }
