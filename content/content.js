@@ -437,6 +437,10 @@
 
   // ---- Download ---------------------------------------------------------
 
+  function onStories() {
+    return /^\/stories\//.test(location.pathname);
+  }
+
   // The media object in IG's React props carries direct CDN URLs —
   // video_versions for videos (the <video> src is often an undownloadable
   // blob: URL), image_versions2 for photos. IG mixes two shapes: snake_case
@@ -656,7 +660,7 @@
   // (fetch + save) settles; further clicks are ignored meanwhile.
   let dlBusy = false;
   function triggerDownload() {
-    if (dlBusy) return;
+    if (dlBusy || onStories()) return;
     const isVideo = !!activeVideo;
     if (!isVideo && !imgDl.__target) return;
     dlBusy = true;
@@ -670,9 +674,9 @@
   }
 
   // One floating button at the top-right of the active media — the video
-  // when one is playing, the main post image otherwise.
+  // when one is playing, the main post image otherwise. Not on stories.
   function updateImgDl(v) {
-    const target = v || pickActiveImage();
+    const target = onStories() ? null : v || pickActiveImage();
     if (!target) {
       imgDl.style.display = "none";
       imgDl.__target = null;
