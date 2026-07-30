@@ -161,7 +161,7 @@
   style.textContent = `
     :host, * { box-sizing: border-box; }
     #bar {
-      position: fixed; display: none; align-items: center; gap: 10px;
+      position: fixed; display: none; align-items: center; gap: 4px;
       height: ${BAR_H}px; padding: 0 12px;
       background: linear-gradient(to top, rgba(0,0,0,.78), rgba(0,0,0,.35) 70%, rgba(0,0,0,0));
       border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
@@ -174,7 +174,7 @@
 
     /* Empty slot at the end where Instagram's own audio button sits —
        clicks fall through the bar to it. */
-    .ig-slot { width: 44px; flex-shrink: 0; }
+    .ig-slot { width: 36px; flex-shrink: 0; }
 
     .btn {
       background: none; border: none; color: #fff; cursor: pointer;
