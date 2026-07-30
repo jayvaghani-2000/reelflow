@@ -229,17 +229,18 @@
       pointer-events: none; user-select: none; -webkit-user-select: none;
     }
 
-    /* Floating download button over post images (videos get the bar's). */
-    #imgdl {
+    /* Floating download buttons — one over the active video, one over the
+       main post image. */
+    .dlbtn {
       position: fixed; display: none; align-items: center; justify-content: center;
       width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%;
       background: rgba(0,0,0,.6); cursor: pointer;
     }
-    #imgdl:hover { background: rgba(0,0,0,.85); }
-    #imgdl svg { width: 20px; height: 20px; fill: #fff; }
-    #imgdl.loading { cursor: default; }
-    #imgdl.loading svg { display: none; }
-    #imgdl.loading::after {
+    .dlbtn:hover { background: rgba(0,0,0,.85); }
+    .dlbtn svg { width: 20px; height: 20px; fill: #fff; }
+    .dlbtn.loading { cursor: default; }
+    .dlbtn.loading svg { display: none; }
+    .dlbtn.loading::after {
       content: ""; width: 16px; height: 16px; border-radius: 50%;
       border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
       animation: rs-spin .7s linear infinite;
@@ -304,11 +305,16 @@
   dateBadge.id = "posted";
   shadow.appendChild(dateBadge);
 
-  const imgDl = document.createElement("button");
-  imgDl.id = "imgdl";
-  imgDl.innerHTML = IC.download;
-  imgDl.title = "Download (d)";
-  shadow.appendChild(imgDl);
+  function mkDlBtn(title) {
+    const b = document.createElement("button");
+    b.className = "dlbtn";
+    b.innerHTML = IC.download;
+    b.title = title;
+    shadow.appendChild(b);
+    return b;
+  }
+  const imgDl = mkDlBtn("Download video (d)");
+  const postDl = mkDlBtn("Download image");
 
   function mount() {
     (document.body || document.documentElement).appendChild(hostEl);
@@ -656,39 +662,49 @@
     });
   }
 
-  // Busy state: the floating button becomes a spinner until the download
-  // (fetch + save) settles; further clicks are ignored meanwhile.
+  // Busy state: the clicked button becomes a spinner until the download
+  // (fetch + save) settles; further downloads are ignored meanwhile.
   let dlBusy = false;
-  function triggerDownload() {
+  function runDownload(btn, thunk) {
     if (dlBusy || onStories()) return;
-    const isVideo = !!activeVideo;
-    if (!isVideo && !imgDl.__target) return;
     dlBusy = true;
-    imgDl.classList.add("loading");
+    btn.classList.add("loading");
     const done = function () {
       dlBusy = false;
-      imgDl.classList.remove("loading");
+      btn.classList.remove("loading");
     };
-    const p = isVideo ? downloadActiveVideo() : downloadImage(imgDl.__target);
-    Promise.resolve(p).then(done, done);
+    Promise.resolve(thunk()).then(done, done);
+  }
+  function triggerDownload() {
+    if (activeVideo) {
+      runDownload(imgDl, downloadActiveVideo);
+    } else if (postDl.__img) {
+      runDownload(postDl, function () {
+        return downloadImage(postDl.__img);
+      });
+    }
   }
 
-  // One floating button at the top-right of the active media — the video
-  // when one is playing, the main post image otherwise. Not on stories.
-  function updateImgDl(v) {
-    const target = onStories() ? null : v || pickActiveImage();
-    if (!target) {
-      imgDl.style.display = "none";
-      imgDl.__target = null;
-      imgDl.__isVideo = false;
+  function pinDlBtn(btn, el) {
+    if (!el) {
+      btn.style.display = "none";
       return;
     }
-    imgDl.__target = target;
-    imgDl.__isVideo = !!v;
-    const r = target.getBoundingClientRect();
-    imgDl.style.display = "flex";
-    imgDl.style.left = Math.min(r.right, window.innerWidth) - 44 + "px";
-    imgDl.style.top = Math.max(r.top, 0) + 8 + "px";
+    const r = el.getBoundingClientRect();
+    btn.style.display = "flex";
+    btn.style.left = Math.min(r.right, window.innerWidth) - 44 + "px";
+    btn.style.top = Math.max(r.top, 0) + 8 + "px";
+  }
+
+  // Two floating buttons at the top-right of the active media: one on the
+  // playing video, one on the main post image — both can show at once in
+  // the feed. Neither on stories.
+  function updateImgDl(v) {
+    const stories = onStories();
+    pinDlBtn(imgDl, stories ? null : v);
+    const im = stories ? null : pickActiveImage();
+    postDl.__img = im;
+    pinDlBtn(postDl, im);
   }
 
   function positionBar(v) {
@@ -1041,9 +1057,21 @@
     // Keep the click off Instagram — it would open/like the post.
     e.stopPropagation();
     e.preventDefault();
-    triggerDownload();
+    if (activeVideo) runDownload(imgDl, downloadActiveVideo);
+  });
+  postDl.addEventListener("click", function (e) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (postDl.__img) {
+      runDownload(postDl, function () {
+        return downloadImage(postDl.__img);
+      });
+    }
   });
   imgDl.addEventListener("pointerdown", function (e) {
+    e.stopPropagation();
+  });
+  postDl.addEventListener("pointerdown", function (e) {
     e.stopPropagation();
   });
 
