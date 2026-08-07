@@ -78,6 +78,51 @@
     } catch (e) {}
   }
 
+  // ---- Full-bleed reel detection ------------------------------------------
+  // SPA-navigating to /reels/ sometimes renders the reel unconstrained — the
+  // video fills the whole viewport instead of the 9:16 column. Like the
+  // stuck-mobile-layout case, only a real document load fixes it. In the
+  // desktop layout the reel column never comes close to the full viewport
+  // width, so a video wider than 70% of it (persisting past a grace period)
+  // is a reliable symptom. One reload per URL, so it can never loop.
+  const FULL_BLEED_GRACE_MS = 1500;
+  let fullBleedSince = 0;
+  let fullBleedReloaded = "";
+
+  function checkReelLayout(v) {
+    if (
+      !v ||
+      window.innerWidth < 770 ||
+      !/^\/reels?(\/|$)/.test(location.pathname)
+    ) {
+      fullBleedSince = 0;
+      return;
+    }
+    const r = v.getBoundingClientRect();
+    if (r.width <= window.innerWidth * 0.7) {
+      fullBleedSince = 0;
+      return;
+    }
+    const now = performance.now();
+    if (!fullBleedSince) {
+      fullBleedSince = now;
+      return;
+    }
+    if (now - fullBleedSince < FULL_BLEED_GRACE_MS) return;
+    if (fullBleedReloaded === location.href) return;
+    fullBleedReloaded = location.href;
+    if (inFrame) {
+      try {
+        window.parent.postMessage(
+          { __reelSeeker: "needsReload", href: location.href },
+          "*"
+        );
+      } catch (e) {}
+    } else {
+      location.reload();
+    }
+  }
+
   // ---- Side panel: keep IG's left nav rail collapsed --------------------
   // In the panel, hovering the nav rail expands it over the content. Two
   // defenses: (1) swallow every hover-family event whose target is anywhere
@@ -146,7 +191,32 @@
   let activeVideo = null;
   let dragging = false;
   let hovering = false;
-  let autoNext = false;
+  // ---- Settings ----------------------------------------------------------
+  // Persisted as one JSON blob; the popup reads/writes through the
+  // __reelSeekerGetSettings/__reelSeekerSetSettings hooks below.
+  const SETTINGS_KEY = "rsSettings";
+  const DEFAULT_SETTINGS = {
+    autoNext: false,
+    downloads: true,
+    speed: 1,
+    skip: 10
+  };
+  const settings = Object.assign({}, DEFAULT_SETTINGS);
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+    // Migrate the old standalone auto-next flag.
+    if (saved.autoNext == null && localStorage.getItem("rsAutoNext") != null) {
+      saved.autoNext = localStorage.getItem("rsAutoNext") === "1";
+    }
+    Object.assign(settings, saved);
+  } catch (e) {}
+  function saveSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {}
+  }
+
+  let autoNext = !!settings.autoNext;
   let lastAutoAdvance = 0;
   let autoNextSuppressUntil = 0; // set on manual seeks so they don't look like a loop-wrap
 
@@ -220,15 +290,6 @@
       padding: 4px 6px;
     }
 
-    #posted {
-      position: fixed; display: none; transform: translateX(-100%);
-      padding: 4px 10px; border-radius: 999px;
-      background: rgba(0,0,0,.6); color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 12px; font-weight: 600; white-space: nowrap;
-      pointer-events: none; user-select: none; -webkit-user-select: none;
-    }
-
     /* Floating download buttons — one over the active video, one over the
        main post image. */
     .dlbtn {
@@ -254,12 +315,22 @@
   const IC = {
     play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
     pause: '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
-    back10:
-      '<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/>' +
-      '<text x="12" y="15.5" font-size="7" font-weight="700" text-anchor="middle" fill="#fff" font-family="sans-serif">10</text></svg>',
-    fwd10:
-      '<svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a5 5 0 1 0 5 5h2a7 7 0 1 1-7-7z"/>' +
-      '<text x="12" y="15.5" font-size="7" font-weight="700" text-anchor="middle" fill="#fff" font-family="sans-serif">10</text></svg>',
+    back: function (n) {
+      return (
+        '<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/>' +
+        '<text x="12" y="15.5" font-size="7" font-weight="700" text-anchor="middle" fill="#fff" font-family="sans-serif">' +
+        n +
+        "</text></svg>"
+      );
+    },
+    fwd: function (n) {
+      return (
+        '<svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a5 5 0 1 0 5 5h2a7 7 0 1 1-7-7z"/>' +
+        '<text x="12" y="15.5" font-size="7" font-weight="700" text-anchor="middle" fill="#fff" font-family="sans-serif">' +
+        n +
+        "</text></svg>"
+      );
+    },
     autoNext:
       '<svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg>',
     download:
@@ -271,9 +342,9 @@
   const bar = document.createElement("div");
   bar.id = "bar";
 
-  const backBtn = mkBtn("small", IC.back10, "Back 10s (,)");
+  const backBtn = mkBtn("small", IC.back(settings.skip), "Back (,)");
   const playBtn = mkBtn("", IC.play, "Play/Pause (k)");
-  const fwdBtn = mkBtn("small", IC.fwd10, "Forward 10s (.)");
+  const fwdBtn = mkBtn("small", IC.fwd(settings.skip), "Forward (.)");
   const curTime = mkSpan("time cur", "0:00");
   const track = document.createElement("div");
   track.className = "track";
@@ -301,9 +372,6 @@
   );
   shadow.appendChild(bar);
 
-  const dateBadge = document.createElement("div");
-  dateBadge.id = "posted";
-  shadow.appendChild(dateBadge);
 
   function mkDlBtn(title) {
     const b = document.createElement("button");
@@ -433,10 +501,23 @@
       const visW = Math.max(0, Math.min(c.right, vw) - Math.max(c.left, 0));
       const visH = Math.max(0, Math.min(c.bottom, vh) - Math.max(c.top, 0));
       const score = visW * visH;
-      if (score > bestScore) {
-        bestScore = score;
-        best = im;
-      }
+      if (score <= 0 || score <= bestScore) return;
+      // SPA leftovers: the previous page can stay mounted, laid out, and
+      // merely covered by the new view. Hit-test the image's visible center —
+      // if what's on top there isn't this post, the image isn't really shown.
+      const cx = (Math.max(c.left, 0) + Math.min(c.right, vw)) / 2;
+      const cy = (Math.max(c.top, 0) + Math.min(c.bottom, vh)) / 2;
+      const hit = document.elementFromPoint(cx, cy);
+      if (!hit) return;
+      const art = im.closest("article");
+      const related =
+        hit === im ||
+        im.contains(hit) ||
+        (art && art.contains(hit)) ||
+        hit === hostEl; // our own overlay doesn't count as cover
+      if (!related) return;
+      bestScore = score;
+      best = im;
     });
     return best;
   }
@@ -666,7 +747,7 @@
   // (fetch + save) settles; further downloads are ignored meanwhile.
   let dlBusy = false;
   function runDownload(btn, thunk) {
-    if (dlBusy || onStories()) return;
+    if (dlBusy || onStories() || !settings.downloads) return;
     dlBusy = true;
     btn.classList.add("loading");
     const done = function () {
@@ -685,6 +766,14 @@
     }
   }
 
+  // Image downloads only make sense on feed / post / explore pages. On reel
+  // and story pages any qualifying <img> is a leftover from the previous SPA
+  // page (IG keeps it mounted) or a poster — pinning a button to it puts a
+  // stray icon over the reel.
+  function imagesAllowed() {
+    return !/^\/(reels?(\/|$)|stories\/)/.test(location.pathname);
+  }
+
   function pinDlBtn(btn, el) {
     if (!el) {
       btn.style.display = "none";
@@ -700,9 +789,14 @@
   // playing video, one on the main post image — both can show at once in
   // the feed. Neither on stories.
   function updateImgDl(v) {
-    const stories = onStories();
-    pinDlBtn(imgDl, stories ? null : v);
-    const im = stories ? null : pickActiveImage();
+    if (!settings.downloads) {
+      pinDlBtn(imgDl, null);
+      pinDlBtn(postDl, null);
+      postDl.__img = null;
+      return;
+    }
+    pinDlBtn(imgDl, onStories() ? null : v);
+    const im = imagesAllowed() ? pickActiveImage() : null;
     postDl.__img = im;
     pinDlBtn(postDl, im);
   }
@@ -716,105 +810,6 @@
     bar.style.left = left + "px";
     bar.style.width = width + "px";
     bar.style.top = r.bottom - BAR_H + "px";
-  }
-
-  // ---- Posted date badge ----------------------------------------------
-
-  // The reels feed usually has no <time> element, but IG's React props on
-  // the video's fiber tree carry the media object with taken_at (unix
-  // seconds). Look for taken_at / taken_at_timestamp up to 2 levels deep in
-  // a props object, skipping React children.
-  function takenAtFrom(obj, depth) {
-    if (!obj || typeof obj !== "object") return null;
-    let t = obj.taken_at != null ? obj.taken_at : obj.taken_at_timestamp;
-    if (typeof t === "number" && t > 1e9) {
-      return t > 1e12 ? t / 1000 : t; // ms → s just in case
-    }
-    if (depth <= 0) return null;
-    for (const k in obj) {
-      if (k === "children") continue;
-      const val = obj[k];
-      if (!val || typeof val !== "object") continue;
-      if (Array.isArray(val)) {
-        for (let i = 0; i < val.length && i < 3; i++) {
-          const r = takenAtFrom(val[i], depth - 1);
-          if (r) return r;
-        }
-      } else {
-        const r = takenAtFrom(val, depth - 1);
-        if (r) return r;
-      }
-    }
-    return null;
-  }
-
-  function reactTakenAt(v) {
-    let fiber = null;
-    for (const k in v) {
-      if (k.indexOf("__reactFiber$") === 0 || k.indexOf("__reactProps$") === 0) {
-        fiber = v[k];
-        if (k.indexOf("__reactProps$") === 0) {
-          const t = takenAtFrom(fiber, 2);
-          if (t) return t;
-          fiber = null;
-        }
-        if (fiber) break;
-      }
-    }
-    for (let depth = 0; fiber && depth < 40; depth++, fiber = fiber.return) {
-      const t = takenAtFrom(fiber.memoizedProps, 2);
-      if (t) return t;
-    }
-    return null;
-  }
-
-  // Cache per video: once found it sticks; misses retry once a second.
-  function postedLabel(v) {
-    if (v.__rsDateLabel) return v.__rsDateLabel;
-    const now = performance.now();
-    if (v.__rsDateAt && now - v.__rsDateAt < 1000) return null;
-    v.__rsDateAt = now;
-
-    let d = null;
-    // 1) <time datetime="..."> if IG rendered one (single-reel pages)
-    let root = v.parentElement;
-    for (let i = 0; i < 8 && root; i++) {
-      const t = root.querySelector("time[datetime]");
-      if (t) {
-        d = new Date(t.getAttribute("datetime"));
-        break;
-      }
-      root = root.parentElement;
-    }
-    // 2) React props fallback (reels feed)
-    if (!d || isNaN(d)) {
-      const ts = reactTakenAt(v);
-      if (ts) d = new Date(ts * 1000);
-    }
-    if (!d || isNaN(d)) return null;
-
-    v.__rsDateLabel =
-      "Posted " +
-      d.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric"
-      });
-    return v.__rsDateLabel;
-  }
-
-  function updateDateBadge(v) {
-    const label = postedLabel(v);
-    if (!label) {
-      dateBadge.style.display = "none";
-      return;
-    }
-    if (dateBadge.textContent !== label) dateBadge.textContent = label;
-    const r = v.getBoundingClientRect();
-    dateBadge.style.display = "block";
-    // 54px in from the right edge — clear of the download button (36px + gaps).
-    dateBadge.style.left = Math.min(r.right, window.innerWidth) - 54 + "px";
-    dateBadge.style.top = Math.max(r.top, 0) + 14 + "px";
   }
 
   // ---- UI update loop -------------------------------------------------
@@ -867,6 +862,7 @@
     keepNavCollapsed();
     const v = pickActiveVideo();
     updateImgDl(v);
+    checkReelLayout(v);
     if (!v) {
       hide();
       return;
@@ -879,17 +875,21 @@
     }
     activeVideo = v;
     ensureHooks(v);
+    // Default playback speed — applied once per video so the speed button
+    // still works normally afterwards.
+    if (!v.__rsSpeedApplied) {
+      v.__rsSpeedApplied = true;
+      if (settings.speed !== 1) v.playbackRate = settings.speed;
+    }
     bar.classList.add("show");
     positionBar(v);
     updateUI(v);
-    updateDateBadge(v);
     maybeAutoNext(v);
   }
 
   function hide() {
     if (!dragging) {
       bar.classList.remove("show");
-      dateBadge.style.display = "none";
       activeVideo = null;
     }
   }
@@ -990,10 +990,6 @@
 
   // ---- Auto-next --------------------------------------------------------
 
-  try {
-    autoNext = localStorage.getItem("rsAutoNext") === "1";
-  } catch (e) {}
-
   function renderAutoNext() {
     autoNextBtn.classList.toggle("on", autoNext);
     autoNextBtn.title = "Auto-next reel (a) — " + (autoNext ? "on" : "off");
@@ -1001,19 +997,35 @@
   renderAutoNext();
 
   function setAutoNext(on) {
-    autoNext = on;
-    try {
-      localStorage.setItem("rsAutoNext", on ? "1" : "0");
-    } catch (e) {}
-    renderAutoNext();
+    applySettings({ autoNext: !!on });
   }
+
+  // ---- Apply settings ----------------------------------------------------
+
+  function refreshSkipUI() {
+    backBtn.innerHTML = IC.back(settings.skip);
+    fwdBtn.innerHTML = IC.fwd(settings.skip);
+    backBtn.title = "Back " + settings.skip + "s (,)";
+    fwdBtn.title = "Forward " + settings.skip + "s (.)";
+  }
+
+  function applySettings(patch) {
+    Object.assign(settings, patch || {});
+    settings.speed = parseFloat(settings.speed) || 1;
+    settings.skip = parseInt(settings.skip, 10) || 10;
+    autoNext = !!settings.autoNext;
+    saveSettings();
+    renderAutoNext();
+    refreshSkipUI();
+  }
+  applySettings({});
 
   // Exposed for the extension popup — we run in the page's MAIN world, so
   // the popup reaches these via chrome.scripting.executeScript({world:"MAIN"}).
-  window.__reelSeekerGetAutoNext = function () {
-    return autoNext;
+  window.__reelSeekerGetSettings = function () {
+    return Object.assign({}, settings);
   };
-  window.__reelSeekerSetAutoNext = setAutoNext;
+  window.__reelSeekerSetSettings = applySettings;
 
   function clickNextReel() {
     const el =
@@ -1044,10 +1056,10 @@
 
   playBtn.addEventListener("click", togglePlay);
   backBtn.addEventListener("click", function () {
-    skip(-10);
+    skip(-settings.skip);
   });
   fwdBtn.addEventListener("click", function () {
-    skip(10);
+    skip(settings.skip);
   });
   speedBtn.addEventListener("click", cycleSpeed);
   autoNextBtn.addEventListener("click", function () {
@@ -1135,11 +1147,11 @@
       if (typing) return;
 
       if (e.key === ",") {
-        skip(-10);
+        skip(-settings.skip);
         e.preventDefault();
         e.stopPropagation();
       } else if (e.key === ".") {
-        skip(10);
+        skip(settings.skip);
         e.preventDefault();
         e.stopPropagation();
       } else if (e.key === "k" || e.key === "K") {

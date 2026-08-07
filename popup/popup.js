@@ -1,24 +1,41 @@
-/* Popup — mirrors the in-page auto-next toggle.
+/* Popup — mirrors the in-page settings.
  * The content script runs in the page's MAIN world, so we reach its exposed
  * window.__reelSeeker* hooks with chrome.scripting.executeScript({world:"MAIN"}).
  */
 (async function () {
   "use strict";
 
-  const toggle = document.getElementById("autonext");
   const hint = document.getElementById("hint");
+  const toggles = {
+    autoNext: document.getElementById("autonext"),
+    downloads: document.getElementById("downloads")
+  };
+  const selects = {
+    speed: document.getElementById("speed"),
+    skip: document.getElementById("skip")
+  };
+  const allControls = [
+    toggles.autoNext,
+    toggles.downloads,
+    selects.speed,
+    selects.skip
+  ];
 
-  document.getElementById("openPanel").addEventListener("click", async function () {
-    try {
-      const win = await chrome.windows.getCurrent();
-      await chrome.sidePanel.open({ windowId: win.id });
-      window.close();
-    } catch (e) {}
-  });
+  document
+    .getElementById("openPanel")
+    .addEventListener("click", async function () {
+      try {
+        const win = await chrome.windows.getCurrent();
+        await chrome.sidePanel.open({ windowId: win.id });
+        window.close();
+      } catch (e) {}
+    });
 
   function showHint() {
     hint.classList.add("show");
-    toggle.disabled = true;
+    allControls.forEach(function (c) {
+      c.disabled = true;
+    });
   }
 
   let tabId = null;
@@ -31,32 +48,51 @@
       target: { tabId: tabId },
       world: "MAIN",
       func: function () {
-        return window.__reelSeekerGetAutoNext
-          ? { ok: true, on: window.__reelSeekerGetAutoNext() }
-          : { ok: false };
+        return window.__reelSeekerGetSettings
+          ? window.__reelSeekerGetSettings()
+          : null;
       }
     });
-    if (!res || !res.result || !res.result.ok) return showHint();
+    const s = res && res.result;
+    if (!s) return showHint();
 
-    toggle.checked = res.result.on;
-    toggle.disabled = false;
+    toggles.autoNext.checked = !!s.autoNext;
+    toggles.downloads.checked = !!s.downloads;
+    selects.speed.value = String(s.speed);
+    selects.skip.value = String(s.skip);
+    allControls.forEach(function (c) {
+      c.disabled = false;
+    });
   } catch (e) {
     // Not an instagram.com tab (no host access) or page not ready.
     return showHint();
   }
 
-  toggle.addEventListener("change", async function () {
+  async function push(patch) {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tabId },
         world: "MAIN",
-        func: function (on) {
-          if (window.__reelSeekerSetAutoNext) window.__reelSeekerSetAutoNext(on);
+        func: function (p) {
+          if (window.__reelSeekerSetSettings) window.__reelSeekerSetSettings(p);
         },
-        args: [toggle.checked]
+        args: [patch]
       });
     } catch (e) {
       showHint();
     }
+  }
+
+  toggles.autoNext.addEventListener("change", function () {
+    push({ autoNext: toggles.autoNext.checked });
+  });
+  toggles.downloads.addEventListener("change", function () {
+    push({ downloads: toggles.downloads.checked });
+  });
+  selects.speed.addEventListener("change", function () {
+    push({ speed: parseFloat(selects.speed.value) });
+  });
+  selects.skip.addEventListener("change", function () {
+    push({ skip: parseInt(selects.skip.value, 10) });
   });
 })();

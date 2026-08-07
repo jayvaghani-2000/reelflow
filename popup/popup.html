@@ -4,8 +4,11 @@
   <meta charset="utf-8" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html {
+      width: 280px; max-width: 280px;
+    }
     body {
-      width: 280px;
+      width: 280px; max-width: 280px; overflow-x: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #121212; color: #fff;
     }
@@ -18,7 +21,7 @@
 
     .row {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 16px;
+      padding: 10px 16px;
       border-top: 1px solid rgba(255,255,255,.08);
     }
     .row .label { font-size: 13px; font-weight: 600; }
@@ -40,6 +43,15 @@
     .switch input:checked + .slider::before { transform: translateX(18px); }
     .switch input:disabled + .slider { opacity: .4; cursor: default; }
 
+    select {
+      background: rgba(255,255,255,.1); color: #fff;
+      border: 1px solid rgba(255,255,255,.2); border-radius: 6px;
+      font: inherit; font-size: 12px; font-weight: 600;
+      padding: 4px 6px; cursor: pointer; flex-shrink: 0;
+    }
+    select:disabled { opacity: .4; cursor: default; }
+    select option { background: #222; color: #fff; }
+
     #hint {
       display: none; padding: 10px 16px; font-size: 11px;
       color: #ffb3cb; background: rgba(255,45,111,.12);
@@ -60,6 +72,7 @@
       padding: 12px 16px 6px;
       border-top: 1px solid rgba(255,255,255,.08);
     }
+    h2:first-of-type { border-top: none; padding-top: 4px; }
     .keys { padding: 0 16px 14px; }
     .key-row {
       display: flex; align-items: center; gap: 4px;
@@ -82,6 +95,8 @@
     <h1>Reel Seeker</h1>
   </header>
 
+  <h2>Settings</h2>
+
   <div class="row">
     <div>
       <div class="label">Auto-next reel</div>
@@ -93,6 +108,43 @@
     </label>
   </div>
 
+  <div class="row">
+    <div>
+      <div class="label">Download buttons</div>
+      <div class="sub">Floating button on videos and images</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="downloads" disabled />
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="row">
+    <div>
+      <div class="label">Default speed</div>
+      <div class="sub">Applied to each new video</div>
+    </div>
+    <select id="speed" disabled>
+      <option value="1">1&times;</option>
+      <option value="1.25">1.25&times;</option>
+      <option value="1.5">1.5&times;</option>
+      <option value="2">2&times;</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <div>
+      <div class="label">Skip amount</div>
+      <div class="sub">For the buttons and , . keys</div>
+    </div>
+    <select id="skip" disabled>
+      <option value="5">5s</option>
+      <option value="10">10s</option>
+      <option value="15">15s</option>
+      <option value="30">30s</option>
+    </select>
+  </div>
+
   <div id="hint">Open a video on instagram.com to control this.</div>
 
   <div class="panel-row">
@@ -101,11 +153,11 @@
 
   <h2>Keyboard shortcuts</h2>
   <div class="keys">
-    <div class="key-row"><kbd>,</kbd> Back 10 seconds</div>
-    <div class="key-row"><kbd>.</kbd> Forward 10 seconds</div>
+    <div class="key-row"><kbd>,</kbd> Skip back</div>
+    <div class="key-row"><kbd>.</kbd> Skip forward</div>
     <div class="key-row"><kbd>k</kbd> Play / pause</div>
     <div class="key-row"><kbd>m</kbd> Sound on / off</div>
-    <div class="key-row"><kbd>d</kbd> Download video</div>
+    <div class="key-row"><kbd>d</kbd> Download</div>
     <div class="key-row"><kbd>a</kbd> Toggle auto-next</div>
   </div>
 
