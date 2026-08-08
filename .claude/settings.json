@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const m=require\\('/Users/jayvaghani/Documents/Project/ig-reels-seekbar/manifest.json'\\); console.log\\(JSON.stringify\\(m.content_scripts,null,1\\), m.background, m.permissions\\)\")",
+      "Bash(node --check dist/content/content.js)",
+      "Bash(node --check dist/popup/popup.js)",
+      "Bash(node --check dist/panel/panel.js)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const m=require\\('./manifest.json'\\); console.log\\('name:',m.name.length,'chars | desc:',m.description.length,'chars'\\); console.log\\(m.name\\); console.log\\(m.description\\)\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('manifest.json','utf8'\\)\\);console.log\\('OK'\\)\")"
+    ]
+  }
+}

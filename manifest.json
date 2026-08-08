@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Reel Seeker — Progress Bar for Instagram Reels",
-  "short_name": "Reel Seeker",
+  "name": "ReelFlow — Video Controls & Downloader for Instagram",
+  "short_name": "ReelFlow",
   "version": "1.0.0",
-  "description": "Adds a real video progress bar to Instagram Reels on the web, with seek, play/pause, ±10s skip, time display, and playback speed.",
+  "description": "Seek bar, playback speed, skip, auto-next and one-click downloads for Instagram Reels and posts, plus a side panel player.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -11,13 +11,16 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "Reel Seeker",
+    "default_title": "ReelFlow",
     "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
       "48": "icons/icon48.png"
     }
+  },
+  "background": {
+    "service_worker": "background.js"
   },
   "permissions": ["scripting", "sidePanel", "declarativeNetRequest"],
   "host_permissions": ["*://*.instagram.com/*"],

@@ -1,4 +1,4 @@
-# Reel Seeker — Progress Bar for Instagram Reels
+# ReelFlow — Video Controls & Downloader for Instagram
 
 Instagram Reels on the web don't give you a scrubber — you can't jump to a spot in the video. This Chrome extension (Manifest V3) overlays a real video control bar on the reel you're watching, so you can seek, skip, pause, and change speed like any normal player.
 
