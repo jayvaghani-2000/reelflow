@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 440px; height: 280px; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(360px 240px at 92% -12%, rgba(150,47,191,.5), transparent 60%),
+        radial-gradient(320px 260px at -8% 112%, rgba(255,45,111,.4), transparent 60%),
+        linear-gradient(135deg, #17101f 0%, #1d1026 55%, #240f1c 100%);
+      color: #fff; position: relative;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px;
+    }
+    body::before {
+      content: ""; position: absolute; inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+    .brand { position: relative; display: flex; align-items: center; gap: 12px; }
+    .mark {
+      width: 46px; height: 46px; border-radius: 12px;
+      background: linear-gradient(135deg, #ff2d6f, #962fbf);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 24px rgba(255,45,111,.5);
+    }
+    .mark svg { width: 26px; height: 26px; fill: #fff; }
+    .name { font-size: 34px; font-weight: 800; letter-spacing: -.02em; }
+
+    .tag {
+      position: relative; font-size: 15px; font-weight: 600;
+      color: rgba(255,255,255,.78); text-align: center;
+    }
+    .tag .accent {
+      background: linear-gradient(90deg, #ff2d6f, #c86dd7);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      font-weight: 800;
+    }
+
+    /* mini control bar */
+    .bar {
+      position: relative; margin-top: 6px;
+      width: 360px; height: 46px; border-radius: 12px;
+      background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.14);
+      display: flex; align-items: center; gap: 9px; padding: 0 14px;
+      box-shadow: 0 14px 30px rgba(0,0,0,.45);
+    }
+    .bar svg { width: 16px; height: 16px; fill: #fff; flex-shrink: 0; }
+    .t { font-size: 11px; font-weight: 600; color: rgba(255,255,255,.9); flex-shrink: 0; }
+    .track { position: relative; flex: 1; height: 4px; border-radius: 4px; background: rgba(255,255,255,.28); }
+    .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 42%; border-radius: 4px; background: #ff2d6f; }
+    .thumb {
+      position: absolute; left: 42%; top: 50%; transform: translate(-50%,-50%);
+      width: 11px; height: 11px; border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,.5);
+    }
+    .sp { font-size: 11px; font-weight: 800; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <div class="brand">
+    <div class="mark"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+    <div class="name">ReelFlow</div>
+  </div>
+
+  <div class="tag">Seek &middot; Speed &middot; Auto-next &middot; <span class="accent">Downloads</span><br />for Instagram</div>
+
+  <div class="bar">
+    <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a5 5 0 1 0 5 5h2a7 7 0 1 1-7-7z"/></svg>
+    <span class="t">0:12</span>
+    <span class="track"><span class="fill"></span><span class="thumb"></span></span>
+    <span class="t">0:29</span>
+    <span class="sp">1.25&times;</span>
+    <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
+  </div>
+</body>
+</html>

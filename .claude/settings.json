@@ -7,7 +7,11 @@
       "Bash(node --check dist/panel/panel.js)",
       "Bash(node -e ' *)",
       "Bash(node -e \"const m=require\\('./manifest.json'\\); console.log\\('name:',m.name.length,'chars | desc:',m.description.length,'chars'\\); console.log\\(m.name\\); console.log\\(m.description\\)\")",
-      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('manifest.json','utf8'\\)\\);console.log\\('OK'\\)\")"
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('manifest.json','utf8'\\)\\);console.log\\('OK'\\)\")",
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --force-device-scale-factor=2 --window-size=1280,800 --screenshot=popup-promo-2x.png file://__TRACKED_VAR__/popup-promo.html)",
+      "Bash(sips -z 800 1280 popup-promo-2x.png --out popup-promo-1280x800.png)",
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --force-device-scale-factor=2 --window-size=1400,560 --screenshot=tile-marquee-2x.png file://__TRACKED_VAR__/tile-marquee.html)",
+      "Bash(sips -z 560 1400 tile-marquee-2x.png --out tile-marquee-1400x560.png)"
     ]
   }
 }
